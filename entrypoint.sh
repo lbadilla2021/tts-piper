@@ -13,6 +13,7 @@ echo "=================================="
 export CUDA_VISIBLE_DEVICES=""
 export ORT_DISABLE_ALL_OPTIMIZATION="0"
 export ONNXRUNTIME_PROVIDERS="CPUExecutionProvider"
+export PIPER_USE_CUDA="0"
 
 # Verificar que los modelos existen
 if [ ! -d "/app/models" ] || [ -z "$(ls -A /app/models)" ]; then
@@ -25,6 +26,7 @@ echo ""
 echo "Configuración de CPU:"
 echo "  CUDA_VISIBLE_DEVICES = '$CUDA_VISIBLE_DEVICES'"
 echo "  ONNXRUNTIME_PROVIDERS = $ONNXRUNTIME_PROVIDERS"
+echo "  PIPER_USE_CUDA = $PIPER_USE_CUDA"
 echo ""
 
 # Ejecutar la aplicación Flask
