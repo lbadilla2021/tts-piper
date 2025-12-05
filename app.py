@@ -13,6 +13,7 @@ CPU_ENV_VARS = {
     'ORT_LOGGING_LEVEL': '3',
     'ORT_DISABLE_ALL_OPTIMIZATION': '0',
     'PIPER_USE_CUDA': '0',
+    'ORT_DEVICE_TYPE': 'CPU',
 }
 
 # Aplicar las variables en el proceso principal
@@ -133,12 +134,57 @@ def get_available_voices():
     
     return voices
 
+
+def sanitize_model_config(config_path: Path):
+    """Normaliza el archivo de configuración del modelo para evitar errores.
+
+    Algunas distribuciones antiguas incluyen `PhonemeType.ESPEAK` en vez de
+    `espeak`, lo que rompe con versiones recientes de piper-tts. Aquí
+    reescribimos el archivo de configuración para dejar un valor compatible y
+    forzamos el proveedor de ejecución a CPU por si el JSON trae CUDA.
+    """
+
+    if not config_path.exists():
+        return
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        updated = False
+
+        # Arreglar valor inválido de phoneme_type
+        phoneme_type = config.get('phoneme_type')
+        if isinstance(phoneme_type, str) and phoneme_type.upper().startswith('PHONEMETYPE.'):
+            config['phoneme_type'] = phoneme_type.split('.', 1)[-1].lower()
+            updated = True
+
+        # Forzar proveedor CPU para evitar intentos de usar GPU/CUDA
+        inference = config.get('inference', {}) or {}
+        providers = inference.get('providers')
+        if providers is None or any('CUDA' in provider for provider in providers):
+            inference['providers'] = ['CPUExecutionProvider']
+            config['inference'] = inference
+            updated = True
+
+        if updated:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+    except Exception:
+        # No interrumpir el flujo si hay problemas leyendo/escribiendo
+        pass
+
 def text_to_speech(text, model_id, output_path, speed=1.0):
     """Convierte texto a voz usando Piper"""
     model_path = MODELS_DIR / f"{model_id}.onnx"
+    config_path = MODELS_DIR / f"{model_id}.onnx.json"
     
     if not model_path.exists():
         raise FileNotFoundError(f"Modelo no encontrado: {model_id}")
+
+    # Ajustar configuración del modelo para que sea compatible con CPU
+    sanitize_model_config(config_path)
     
     # Crear archivo temporal para el texto
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:

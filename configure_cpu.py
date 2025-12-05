@@ -8,12 +8,13 @@ import sys
 
 def configure_onnx_cpu_only():
     """Configura ONNX Runtime para usar solo CPU"""
-    
+
     # Variables de entorno críticas para ONNX Runtime
     os.environ['CUDA_VISIBLE_DEVICES'] = ''
     os.environ['ORT_DISABLE_ALL_OPTIMIZATION'] = '0'
     os.environ['ONNXRUNTIME_PROVIDERS'] = 'CPUExecutionProvider'
     os.environ['PIPER_USE_CUDA'] = '0'
+    os.environ['ORT_DEVICE_TYPE'] = 'CPU'
     
     # Intentar configurar programáticamente si onnxruntime está disponible
     try:
