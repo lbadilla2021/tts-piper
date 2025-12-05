@@ -23,9 +23,46 @@ async function loadVoices() {
     try {
         const response = await fetch('/api/voices');
         voices = await response.json();
+
+        updateGenderOptions();
+        resetVoiceSelect();
     } catch (error) {
         console.error('Error cargando voces:', error);
     }
+}
+
+function updateGenderOptions() {
+    const maleOption = genderSelect.querySelector('option[value="male"]');
+    const femaleOption = genderSelect.querySelector('option[value="female"]');
+
+    if (maleOption) {
+        const maleCount = (voices.male || []).length;
+        maleOption.textContent = maleCount > 0
+            ? `Voz Masculina (${maleCount})`
+            : 'Voz Masculina (no disponible)';
+        maleOption.disabled = maleCount === 0;
+    }
+
+    if (femaleOption) {
+        const femaleCount = (voices.female || []).length;
+        femaleOption.textContent = femaleCount > 0
+            ? `Voz Femenina (${femaleCount})`
+            : 'Voz Femenina (no disponible)';
+        femaleOption.disabled = femaleCount === 0;
+    }
+
+    if (genderSelect.value && genderSelect.options[genderSelect.selectedIndex]?.disabled) {
+        genderSelect.value = '';
+    }
+}
+
+function resetVoiceSelect(message = 'Primero selecciona un género') {
+    voiceSelect.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = message;
+    voiceSelect.appendChild(option);
+    voiceSelect.disabled = true;
 }
 
 // Actualizar contador de caracteres
@@ -47,30 +84,30 @@ textInput.addEventListener('input', () => {
 // Actualizar selector de voz cuando cambia el género
 genderSelect.addEventListener('change', () => {
     const selectedGender = genderSelect.value;
-    
-    voiceSelect.innerHTML = '';
-    voiceSelect.disabled = !selectedGender;
-    
+
     if (selectedGender) {
+        const genderVoices = voices[selectedGender] || [];
+        voiceSelect.disabled = genderVoices.length === 0;
+
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
-        defaultOption.textContent = 'Seleccionar voz';
+        defaultOption.textContent = genderVoices.length
+            ? 'Seleccionar voz'
+            : 'No hay voces disponibles para este género';
         voiceSelect.appendChild(defaultOption);
-        
-        const genderVoices = voices[selectedGender] || [];
-        genderVoices.forEach(voice => {
-            const option = document.createElement('option');
-            option.value = voice.id;
-            option.textContent = `${voice.name} - ${voice.accent} (${voice.quality})`;
-            voiceSelect.appendChild(option);
-        });
+
+        if (genderVoices.length) {
+            genderVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = `${voice.name} - ${voice.accent} (${voice.quality})`;
+                voiceSelect.appendChild(option);
+            });
+        }
     } else {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'Primero selecciona un género';
-        voiceSelect.appendChild(option);
+        resetVoiceSelect();
     }
-    
+
     updateGenerateButton();
 });
 

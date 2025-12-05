@@ -66,17 +66,6 @@ MODELS = {
     
     # ========== MÉXICO (Latinoamérica) ==========
     
-    "es_MX-ald-medium": {
-        "url_model": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_MX/ald/medium/es_MX-ald-medium.onnx",
-        "url_config": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_MX/ald/medium/es_MX-ald-medium.onnx.json",
-        "name": "Alejandro (México)",
-        "description": "Voz masculina cálida y natural",
-        "gender": "male",
-        "quality": "medium",
-        "size_mb": 60,
-        "accent": "México"
-    },
-    
     "es_MX-claude-high": {
         "url_model": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_MX/claude/high/es_MX-claude-high.onnx",
         "url_config": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_MX/claude/high/es_MX-claude-high.onnx.json",
