@@ -5,9 +5,20 @@ Completamente offline y dockerizable
 """
 # FORZAR USO DE CPU - DEBE IR ANTES DE TODOS LOS IMPORTS
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-os.environ['ONNXRUNTIME_PROVIDERS'] = 'CPUExecutionProvider'
-os.environ['ORT_LOGGING_LEVEL'] = '3'
+
+# Variables de entorno consistentes para que Piper/ONNX no intenten usar GPU
+CPU_ENV_VARS = {
+    # -1 es entendido por CUDA/ONNX como "sin GPU disponible"
+    'CUDA_VISIBLE_DEVICES': '-1',
+    'CUDA_DEVICE_ORDER': 'PCI_BUS_ID',
+    'ONNXRUNTIME_PROVIDERS': 'CPUExecutionProvider',
+    'ORT_LOGGING_LEVEL': '3',
+    'ORT_DISABLE_ALL_OPTIMIZATION': '0',
+    'PIPER_USE_CUDA': '0',
+}
+
+# Aplicar las variables en el proceso principal
+os.environ.update(CPU_ENV_VARS)
 
 from flask import Flask, render_template, request, jsonify, send_file
 import json
@@ -140,9 +151,7 @@ def text_to_speech(text, model_id, output_path, speed=1.0):
         # Ejecutar Piper TTS (forzar uso de CPU, no GPU)
         # Establecer variables de entorno para deshabilitar CUDA
         env = os.environ.copy()
-        env['CUDA_VISIBLE_DEVICES'] = ''
-        env['ONNXRUNTIME_PROVIDERS'] = 'CPUExecutionProvider'
-        env['ORT_LOGGING_LEVEL'] = '3'  # Solo errores críticos
+        env.update(CPU_ENV_VARS)
         
         cmd = [
             'piper',
