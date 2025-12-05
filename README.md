@@ -5,7 +5,7 @@ Aplicación profesional de conversión de texto a voz (TTS) completamente offlin
 ## 🎯 Características
 
 - ✅ **100% Offline**: Funciona completamente sin conexión a internet
-- 🎙️ **Voces Premium**: 5 voces profesionales en español (España y México)
+- 🎙️ **Voces Premium**: Voces profesionales en español (España, México y Argentina) optimizadas para CPU
 - 👥 **Múltiples Géneros**: Voces masculinas y femeninas
 - 📝 **Múltiples Formatos**: Pega texto o carga archivos .txt/.md
 - ⚡ **Control de Velocidad**: Ajusta la velocidad de 0.5x a 2.0x
@@ -18,10 +18,12 @@ Aplicación profesional de conversión de texto a voz (TTS) completamente offlin
 ### Voces Masculinas
 - **David (España)** - Voz natural y clara - Calidad: Alta
 - **Carlos (España)** - Voz profesional - Calidad: Media
-- **Alejandro (México)** - Voz cálida y natural - Calidad: Alta
+- **Gonzalo (Argentina)** - Voz con acento rioplatense - Calidad: Alta
 
 ### Voces Femeninas
 - **María (España)** - Voz profesional - Calidad: Media
+- **Sandra (España)** - Voz equilibrada - Calidad: Alta
+- **Laura (España)** - Voz rápida para pruebas - Calidad: Rápida
 - **Claudia (México)** - Voz premium de máxima calidad - Calidad: Premium
 
 ## 📋 Requisitos Previos

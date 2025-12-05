@@ -78,7 +78,7 @@ docker-compose down
 ## ⚡ Características Principales
 
 - **Offline**: Sin necesidad de internet
-- **5 Voces**: Masculinas y femeninas en español
+- **Voces CPU**: Masculinas y femeninas en español listas para CPU
 - **Velocidad**: Ajustable de 0.5x a 2.0x
 - **Formatos**: .txt, .md
 - **Límite**: 10,000 caracteres por síntesis
@@ -90,8 +90,10 @@ docker-compose down
 |-----|--------|--------|---------|
 | David | Masculino | España | Alta |
 | Carlos | Masculino | España | Media |
-| Alejandro | Masculino | México | Alta |
+| Gonzalo | Masculino | Argentina | Alta |
 | María | Femenino | España | Media |
+| Sandra | Femenino | España | Alta |
+| Laura | Femenino | España | Rápida |
 | Claudia | Femenino | México | Premium |
 
 ## 🐛 Solución de Problemas Rápida

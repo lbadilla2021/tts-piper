@@ -89,13 +89,6 @@ AVAILABLE_MODELS = {
     },
     
     # México (Latinoamérica)
-    "es_MX-ald-medium": {
-        "name": "Alejandro (México)",
-        "gender": "male",
-        "accent": "México",
-        "quality": "Alta",
-        "description": "Voz masculina cálida y natural"
-    },
     "es_MX-claude-high": {
         "name": "Claudia (México)",
         "gender": "female",
