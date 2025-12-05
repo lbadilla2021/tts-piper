@@ -89,6 +89,41 @@ MODELS = {
         "size_mb": 60,
         "accent": "Argentina"
     },
+
+    # ========== CASTELLANO NEUTRO ADICIONAL ==========
+
+    "es_ES-carlfm-medium": {
+        "url_model": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/carlfm/medium/es_ES-carlfm-medium.onnx",
+        "url_config": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/carlfm/medium/es_ES-carlfm-medium.onnx.json",
+        "name": "Carlos FM (España)",
+        "description": "Voz masculina equilibrada para uso general",
+        "gender": "male",
+        "quality": "medium",
+        "size_mb": 70,
+        "accent": "España"
+    },
+
+    "es_ES-mls_1840-low": {
+        "url_model": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/mls_1840/low/es_ES-mls_1840-low.onnx",
+        "url_config": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/mls_1840/low/es_ES-mls_1840-low.onnx.json",
+        "name": "Lucía (España)",
+        "description": "Voz femenina cálida basada en MLS",
+        "gender": "female",
+        "quality": "low",
+        "size_mb": 25,
+        "accent": "España"
+    },
+
+    "es_ES-mls_11646-low": {
+        "url_model": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/mls_11646/low/es_ES-mls_11646-low.onnx",
+        "url_config": "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/es/es_ES/mls_11646/low/es_ES-mls_11646-low.onnx.json",
+        "name": "Pablo (España)",
+        "description": "Voz masculina neutra basada en MLS",
+        "gender": "male",
+        "quality": "low",
+        "size_mb": 25,
+        "accent": "España"
+    },
     
     # ========== COLOMBIA ==========
     

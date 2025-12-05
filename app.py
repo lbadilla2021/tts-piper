@@ -104,6 +104,29 @@ AVAILABLE_MODELS = {
         "accent": "Argentina",
         "quality": "Alta",
         "description": "Voz masculina con acento argentino"
+    },
+
+    # Voces adicionales (Castellano neutro)
+    "es_ES-carlfm-medium": {
+        "name": "Carlos FM (España)",
+        "gender": "male",
+        "accent": "España",
+        "quality": "Alta",
+        "description": "Voz masculina equilibrada para uso general"
+    },
+    "es_ES-mls_1840-low": {
+        "name": "Lucía (España)",
+        "gender": "female",
+        "accent": "España",
+        "quality": "Media",
+        "description": "Voz femenina cálida basada en MLS"
+    },
+    "es_ES-mls_11646-low": {
+        "name": "Pablo (España)",
+        "gender": "male",
+        "accent": "España",
+        "quality": "Media",
+        "description": "Voz masculina neutra basada en MLS"
     }
 }
 
