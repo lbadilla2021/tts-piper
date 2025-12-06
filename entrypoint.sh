@@ -10,9 +10,11 @@ echo "=================================="
 ./block_gpu.sh
 
 # Forzar uso de CPU (deshabilitar CUDA/GPU)
-export CUDA_VISIBLE_DEVICES=""
+export CUDA_VISIBLE_DEVICES="-1"
+export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 export ORT_DISABLE_ALL_OPTIMIZATION="0"
 export ONNXRUNTIME_PROVIDERS="CPUExecutionProvider"
+export PIPER_USE_CUDA="0"
 
 # Verificar que los modelos existen
 if [ ! -d "/app/models" ] || [ -z "$(ls -A /app/models)" ]; then
@@ -24,7 +26,9 @@ fi
 echo ""
 echo "Configuración de CPU:"
 echo "  CUDA_VISIBLE_DEVICES = '$CUDA_VISIBLE_DEVICES'"
+echo "  CUDA_DEVICE_ORDER = $CUDA_DEVICE_ORDER"
 echo "  ONNXRUNTIME_PROVIDERS = $ONNXRUNTIME_PROVIDERS"
+echo "  PIPER_USE_CUDA = $PIPER_USE_CUDA"
 echo ""
 
 # Ejecutar la aplicación Flask
