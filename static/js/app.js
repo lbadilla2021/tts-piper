@@ -13,6 +13,12 @@ const progressContainer = document.getElementById('progress-container');
 const resultContainer = document.getElementById('result-container');
 const audioPlayer = document.getElementById('audio-player');
 const downloadBtn = document.getElementById('download-btn');
+const maleVoicesGrid = document.getElementById('male-voices');
+const femaleVoicesGrid = document.getElementById('female-voices');
+
+const apiBaseUrl = (window.API_BASE_URL || document.body.dataset.apiBase || '').replace(/\/$/, '');
+const buildApiUrl = (path) => `${apiBaseUrl}${path}`;
+const toAbsoluteUrl = (path) => path.startsWith('http') ? path : `${apiBaseUrl}${path}`;
 
 let voices = { male: [], female: [] };
 let currentAudioUrl = null;
@@ -21,44 +27,65 @@ let currentFilename = null;
 // Cargar voces disponibles
 async function loadVoices() {
     try {
-        const response = await fetch('/api/voices');
+        const response = await fetch(buildApiUrl('/api/voices'));
         voices = await response.json();
+        renderVoiceCards();
+        updateVoiceSelect();
     } catch (error) {
         console.error('Error cargando voces:', error);
     }
 }
 
-// Actualizar contador de caracteres
-textInput.addEventListener('input', () => {
-    const count = textInput.value.length;
-    charCount.textContent = count;
-    
-    if (count > 9000) {
-        charCount.style.color = '#ef4444';
-    } else if (count > 7000) {
-        charCount.style.color = '#f59e0b';
-    } else {
-        charCount.style.color = '#64748b';
-    }
-    
-    updateGenerateButton();
-});
+function renderVoiceCards() {
+    const renderGroup = (container, list, genderClass) => {
+        container.innerHTML = '';
 
-// Actualizar selector de voz cuando cambia el género
-genderSelect.addEventListener('change', () => {
+        if (!list.length) {
+            container.innerHTML = '<p class="voice-description">No hay voces disponibles aún.</p>';
+            return;
+        }
+
+        list.forEach((voice) => {
+            const card = document.createElement('div');
+            card.className = 'voice-card';
+
+            card.innerHTML = `
+                <div class="voice-icon ${genderClass}">
+                    <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                </div>
+                <h4>${voice.name}</h4>
+                <p class="voice-accent">${voice.accent}</p>
+                <p class="voice-description">${voice.description}</p>
+                <span class="quality-badge">${voice.quality}</span>
+            `;
+
+            container.appendChild(card);
+        });
+    };
+
+    renderGroup(maleVoicesGrid, voices.male || [], 'male');
+    renderGroup(femaleVoicesGrid, voices.female || [], 'female');
+
+    document.getElementById('male-count').textContent = voices.male?.length || 0;
+    document.getElementById('female-count').textContent = voices.female?.length || 0;
+}
+
+function updateVoiceSelect() {
     const selectedGender = genderSelect.value;
-    
+
     voiceSelect.innerHTML = '';
     voiceSelect.disabled = !selectedGender;
-    
+
     if (selectedGender) {
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
         defaultOption.textContent = 'Seleccionar voz';
         voiceSelect.appendChild(defaultOption);
-        
+
         const genderVoices = voices[selectedGender] || [];
-        genderVoices.forEach(voice => {
+        genderVoices.forEach((voice) => {
             const option = document.createElement('option');
             option.value = voice.id;
             option.textContent = `${voice.name} - ${voice.accent} (${voice.quality})`;
@@ -70,9 +97,28 @@ genderSelect.addEventListener('change', () => {
         option.textContent = 'Primero selecciona un género';
         voiceSelect.appendChild(option);
     }
-    
+
+    updateGenerateButton();
+}
+
+// Actualizar contador de caracteres
+textInput.addEventListener('input', () => {
+    const count = textInput.value.length;
+    charCount.textContent = count;
+
+    if (count > 45000) {
+        charCount.style.color = '#ef4444';
+    } else if (count > 30000) {
+        charCount.style.color = '#f59e0b';
+    } else {
+        charCount.style.color = '#64748b';
+    }
+
     updateGenerateButton();
 });
+
+// Actualizar selector de voz cuando cambia el género
+genderSelect.addEventListener('change', updateVoiceSelect);
 
 // Actualizar selección de voz
 voiceSelect.addEventListener('change', updateGenerateButton);
@@ -139,7 +185,7 @@ async function handleFileUpload(file) {
     try {
         showNotification('Cargando archivo...', 'info');
         
-        const response = await fetch('/api/upload-file', {
+        const response = await fetch(buildApiUrl('/api/upload-file'), {
             method: 'POST',
             body: formData
         });
@@ -175,7 +221,7 @@ generateBtn.addEventListener('click', async () => {
     generateBtn.disabled = true;
     
     try {
-        const response = await fetch('/api/synthesize', {
+        const response = await fetch(buildApiUrl('/api/synthesize'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -188,7 +234,7 @@ generateBtn.addEventListener('click', async () => {
         if (data.success) {
             // Guardar información del audio
             currentFilename = data.filename;
-            currentAudioUrl = data.download_url;
+            currentAudioUrl = toAbsoluteUrl(data.download_url);
             
             // Mostrar resultado
             progressContainer.style.display = 'none';
@@ -315,24 +361,10 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Cargar estadísticas
-async function loadStats() {
-    try {
-        const response = await fetch('/api/stats');
-        const stats = await response.json();
-        
-        document.getElementById('male-count').textContent = stats.male_voices;
-        document.getElementById('female-count').textContent = stats.female_voices;
-    } catch (error) {
-        console.error('Error cargando estadísticas:', error);
-    }
-}
-
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Aplicación TTS inicializada');
     await loadVoices();
-    await loadStats();
     updateGenerateButton();
 });
 
