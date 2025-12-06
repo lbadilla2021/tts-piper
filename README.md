@@ -1,17 +1,16 @@
 # TTS Piper Frontend
 
-Frontend liviano para consumir el backend de síntesis del proyecto [`tts-piper-2`](https://github.com/lbadilla2021/tts-piper-2). Este repositorio ahora también sincroniza la carpeta `models` del backend para exponer las voces de manera local al frontend.
+Frontend liviano con backend integrado basado en Piper TTS. Incluye el formulario web y un servidor Flask que carga los modelos `.onnx` de la carpeta `models` (los binarios pesados se copian manualmente) para generar audio directamente desde esta misma aplicación.
 
 ## Requisitos
 
 - Python 3.11+
-- `tts-piper-2` corriendo y accesible mediante HTTP (para la síntesis)
 - Docker opcional para un despliegue contenedor
-- Acceso a internet para clonar la carpeta `models` (el servicio seguirá funcionando con los modelos de respaldo si no hay conectividad)
+- Los modelos `.onnx` descargados manualmente (ver sección de modelos)
 
 ## Configuración
 
-La aplicación obtiene la URL base del backend mediante la variable de entorno `API_BASE_URL` (por ejemplo `http://localhost:8000`). Si no se establece, se usará `http://localhost:8000` por defecto.
+La aplicación obtiene la URL base del backend mediante la variable de entorno `API_BASE_URL`. Si no se establece, se usa el mismo origen del frontend (backend integrado).
 
 ## Uso local
 
@@ -19,7 +18,6 @@ La aplicación obtiene la URL base del backend mediante la variable de entorno `
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-export API_BASE_URL=http://localhost:8000
 flask run --host=0.0.0.0 --port=5000
 ```
 
@@ -27,9 +25,18 @@ Abre [http://localhost:5000](http://localhost:5000) en tu navegador y el fronten
 
 ## Modelos locales
 
-- El endpoint `/api/voices` intenta clonar la carpeta `models` del repositorio [`tts-piper-2`](https://github.com/lbadilla2021/tt-piper-2) usando `git` (se puede sobreescribir con la variable `MODEL_REPO_URL`).
-- Si la sincronización falla (por ejemplo por falta de internet) se usa el catálogo local `models/catalog.json` para mantener la interfaz operativa.
-- El estado de sincronización se muestra en la etiqueta “Modelos locales” dentro del formulario principal.
+El catálogo `models/catalog.json` ya incluye 8 voces (4 masculinas y 4 femeninas) para español:
+
+- es_AR-daniela-high
+- es_ES-ariadna-medium
+- es_ES-carlfm-x_low
+- es_ES-davefx-high
+- es_ES-mls_9972-low
+- es_ES-mls_10246-low
+- es_ES-sharvard-medium
+- es_MX-claude-high
+
+Para que cada voz funcione, coloca en `models/` el archivo `.onnx` correspondiente junto a su `.onnx.json` (compartían el mismo nombre en el repositorio original). El endpoint `/api/voices` agrupa las voces por género y el endpoint `/api/synthesize` utiliza los modelos locales para generar el audio.
 
 ## Docker
 
@@ -37,16 +44,17 @@ Abre [http://localhost:5000](http://localhost:5000) en tu navegador y el fronten
 docker-compose up --build -d
 ```
 
-El contenedor expone el puerto `5000` y pasa `API_BASE_URL` al frontend.
+El contenedor expone el puerto `5000` y usa el backend integrado.
 
 ## Estructura
 
 ```
 .
-├── app.py            # Servidor Flask mínimo
+├── app.py            # Servidor Flask con endpoints /api
+├── tts_engine.py     # Motor que carga y cachea los modelos Piper
 ├── templates/        # Plantilla principal
 ├── static/           # Assets (JS/CSS)
-├── Dockerfile        # Imagen de sólo frontend
+├── Dockerfile        # Imagen con frontend + backend integrado
 └── docker-compose.yml
 ```
 

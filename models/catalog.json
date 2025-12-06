@@ -1,28 +1,84 @@
 {
   "voices": [
     {
-      "id": "es-mx-junior",
-      "name": "Junior (ES-MX)",
+      "id": "es-ar-daniela-high",
+      "name": "Daniela (ES-AR)",
+      "gender": "female",
+      "accent": "Español Argentina",
+      "quality": "High",
+      "description": "Voz femenina clara y natural para acento argentino.",
+      "model": "es_AR-daniela-high.onnx",
+      "config": "es_AR-daniela-high.onnx.json"
+    },
+    {
+      "id": "es-es-ariadna-medium",
+      "name": "Ariadna (ES-ES)",
+      "gender": "female",
+      "accent": "Español España",
+      "quality": "Medium",
+      "description": "Voz femenina equilibrada para narraciones generales.",
+      "model": "es_ES-ariadna-medium.onnx",
+      "config": "es_ES-ariadna-medium.onnx.json"
+    },
+    {
+      "id": "es-es-carlfm-xlow",
+      "name": "CarlFM (ES-ES)",
       "gender": "male",
-      "accent": "Español Latino",
-      "quality": "Premium",
-      "description": "Modelo masculino listo para usar sin conexión."
+      "accent": "Español España",
+      "quality": "x_low",
+      "description": "Voz masculina ligera para pruebas y tiempos de respuesta rápidos.",
+      "model": "es_ES-carlfm-x_low.onnx",
+      "config": "es_ES-carlfm-x_low.onnx.json"
     },
     {
-      "id": "es-mx-luisa",
-      "name": "Luisa (ES-MX)",
-      "gender": "female",
-      "accent": "Español Latino",
-      "quality": "Premium",
-      "description": "Modelo femenino con pronunciación clara y natural."
+      "id": "es-es-davefx-high",
+      "name": "DaveFX High (ES-ES)",
+      "gender": "male",
+      "accent": "Español España",
+      "quality": "High",
+      "description": "Voz masculina profunda optimizada para locuciones.",
+      "model": "es_ES-davefx-high.onnx",
+      "config": "es_ES-davefx-high.onnx.json"
     },
     {
-      "id": "en-us-amy",
-      "name": "Amy (EN-US)",
+      "id": "es-es-mls-9972-low",
+      "name": "MLS 9972 (ES-ES)",
       "gender": "female",
-      "accent": "Inglés Americano",
-      "quality": "Standard",
-      "description": "Voz en inglés ideal para materiales bilingües."
+      "accent": "Español España",
+      "quality": "Low",
+      "description": "Voz femenina ligera entrenada con el corpus MLS.",
+      "model": "es_ES-mls_9972-low.onnx",
+      "config": "es_ES-mls_9972-low.onnx.json"
+    },
+    {
+      "id": "es-es-mls-10246-low",
+      "name": "MLS 10246 (ES-ES)",
+      "gender": "male",
+      "accent": "Español España",
+      "quality": "Low",
+      "description": "Voz masculina ligera entrenada con el corpus MLS.",
+      "model": "es_ES-mls_10246-low.onnx",
+      "config": "es_ES-mls_10246-low.onnx.json"
+    },
+    {
+      "id": "es-es-sharvard-medium",
+      "name": "Sharvard (ES-ES)",
+      "gender": "female",
+      "accent": "Español España",
+      "quality": "Medium",
+      "description": "Voz femenina nítida para capacitaciones y tutoriales.",
+      "model": "es_ES-sharvard-medium.onnx",
+      "config": "es_ES-sharvard-medium.onnx.json"
+    },
+    {
+      "id": "es-mx-claude-high",
+      "name": "Claude (ES-MX)",
+      "gender": "male",
+      "accent": "Español México",
+      "quality": "High",
+      "description": "Voz masculina mexicana ideal para contenidos educativos.",
+      "model": "es_MX-claude-high.onnx",
+      "config": "es_MX-claude-high.onnx.json"
     }
   ]
 }

@@ -1,51 +1,29 @@
 #!/usr/bin/env python3
 """
-Aplicación Flask minimalista para servir el frontend de Piper TTS.
+Aplicación Flask para servir el frontend y el backend de Piper TTS.
 
-El backend de síntesis vive en el proyecto `tts-piper-2`; este servicio
-solo entrega los assets estáticos y expone la URL base del backend para
-que el JavaScript del cliente hable directamente con él.
+El servidor expone los endpoints `/api/voices`, `/api/synthesize` y
+`/api/upload-file`, cargando los modelos locales definidos en
+``models/catalog.json`` y generando los audios en ``outputs/``.
 """
 from __future__ import annotations
 
 import os
+import pathlib
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory, url_for
 
-import requests
-
-from model_sync import load_voice_catalog
+from tts_engine import OUTPUT_DIR, TTSEngine, SynthesisError, VoiceNotFoundError
 
 app = Flask(__name__)
+tts_engine = TTSEngine()
 
 
 def _get_api_base_url() -> str:
     """Obtiene la URL base del backend, asegurando que termine sin slash."""
 
-    api_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
+    api_url = os.environ.get("API_BASE_URL", "")
     return api_url.rstrip("/")
-
-
-def _call_backend(paths, method="GET", **kwargs):
-    """Realiza una llamada al backend probando múltiples rutas."""
-
-    base_url = _get_api_base_url()
-    errors = []
-
-    for path in paths:
-        url = f"{base_url}{path}"
-        try:
-            response = requests.request(method, url, timeout=15, **kwargs)
-        except requests.RequestException as exc:  # pragma: no cover - dependiente de red
-            errors.append(str(exc))
-            continue
-
-        if response.ok:
-            return response, url
-
-        errors.append(f"{url} -> {response.status_code}")
-
-    return None, errors
 
 
 @app.route("/")
@@ -64,67 +42,71 @@ def health():
 
 @app.route("/api/voices")
 def voices():
-    """Recupera el catálogo de voces desde el backend y ofrece un respaldo local."""
+    """Recupera el catálogo de voces expuesto por el motor local."""
 
-    backend_response, debug = _call_backend(["/api/voices", "/voices"])
-
-    if backend_response is not None:
-        data = backend_response.json()
-        data.setdefault("synced", True)
-        data.setdefault("message", "Modelos obtenidos desde el backend")
-        return jsonify(data)
-
-    catalog = load_voice_catalog()
-    return jsonify(
-        {
-            "male": catalog.get("male", []),
-            "female": catalog.get("female", []),
-            "other": catalog.get("other", []),
-            "synced": False,
-            "message": "; ".join(debug) or "No se pudo contactar al backend",
-        }
-    )
+    catalog = tts_engine.catalog_by_gender()
+    return jsonify({**catalog, "synced": True, "message": "Modelos locales listos"})
 
 
 @app.route("/api/synthesize", methods=["POST"])
 def synthesize():
-    """Proxy hacia el backend para generar audio."""
+    """Genera audio localmente usando los modelos descargados."""
 
     payload = request.get_json(force=True, silent=True) or {}
-    backend_response, debug = _call_backend(
-        ["/api/synthesize", "/synthesize"], method="POST", json=payload
+    text = str(payload.get("text") or "").strip()
+    voice_id = str(payload.get("voice") or "").strip()
+    speed = float(payload.get("speed") or 1.0)
+
+    if not text:
+        return jsonify({"success": False, "error": "El texto es obligatorio"}), 400
+    if not voice_id:
+        return jsonify({"success": False, "error": "Debes seleccionar una voz"}), 400
+
+    try:
+        filename, output_path = tts_engine.synthesize(text, voice_id, speed)
+    except VoiceNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except SynthesisError as exc:  # pragma: no cover - dependiente de modelo
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+    download_url = url_for("download_audio", filename=output_path.name, _external=False)
+    return jsonify(
+        {
+            "success": True,
+            "voice": voice_id,
+            "filename": filename,
+            "download_url": download_url,
+        }
     )
-
-    if backend_response is None:
-        return (
-            jsonify({"success": False, "error": "; ".join(debug) or "Backend no disponible"}),
-            502,
-        )
-
-    return jsonify(backend_response.json())
 
 
 @app.route("/api/upload-file", methods=["POST"])
 def upload_file():
-    """Proxy hacia el backend para extraer texto de archivos subidos."""
+    """Extrae texto desde archivos de texto plano."""
 
     if "file" not in request.files:
         return jsonify({"success": False, "error": "No se recibió archivo"}), 400
 
     file = request.files["file"]
-    files = {"file": (file.filename, file.stream, file.mimetype)}
+    filename = pathlib.Path(file.filename or "texto.txt").name
+    raw_bytes = file.read()
 
-    backend_response, debug = _call_backend(
-        ["/api/upload-file", "/upload-file"], method="POST", files=files
-    )
+    try:
+        content = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            content = raw_bytes.decode("latin-1")
+        except Exception:  # pragma: no cover - error de codificación
+            return jsonify({"success": False, "error": "No se pudo leer el archivo"}), 400
 
-    if backend_response is None:
-        return (
-            jsonify({"success": False, "error": "; ".join(debug) or "Backend no disponible"}),
-            502,
-        )
+    return jsonify({"success": True, "filename": filename, "text": content})
 
-    return jsonify(backend_response.json())
+
+@app.route("/outputs/<path:filename>")
+def download_audio(filename: str):
+    """Entrega los audios generados."""
+
+    return send_from_directory(OUTPUT_DIR, filename, as_attachment=False)
 
 
 if __name__ == "__main__":
