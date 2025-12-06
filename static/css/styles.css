@@ -170,6 +170,20 @@ body {
     font-size: 15px;
 }
 
+.status-helper {
+    font-size: 14px;
+    margin-top: 8px;
+    color: var(--text-secondary);
+}
+
+.status-ok {
+    color: var(--success);
+}
+
+.status-warning {
+    color: var(--danger);
+}
+
 .card-body {
     padding: 32px;
 }

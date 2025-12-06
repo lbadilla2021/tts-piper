@@ -12,6 +12,8 @@ import os
 
 from flask import Flask, jsonify, render_template
 
+from model_sync import load_voice_catalog, sync_models_if_needed
+
 app = Flask(__name__)
 
 
@@ -34,6 +36,24 @@ def health():
     """Endpoint simple de salud para orquestadores o monitoreo."""
 
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/voices")
+def voices():
+    """Expone las voces disponibles desde la carpeta local de modelos."""
+
+    synced, message = sync_models_if_needed()
+    catalog = load_voice_catalog()
+
+    payload = {
+        "male": catalog.get("male", []),
+        "female": catalog.get("female", []),
+        "other": catalog.get("other", []),
+        "synced": synced,
+        "message": message,
+    }
+
+    return jsonify(payload)
 
 
 if __name__ == "__main__":

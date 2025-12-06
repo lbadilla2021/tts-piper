@@ -1,12 +1,13 @@
 # TTS Piper Frontend
 
-Frontend liviano para consumir el backend de síntesis del proyecto [`tts-piper-2`](https://github.com/lbadilla2021/tts-piper-2). Este repositorio sólo sirve los assets estáticos y expone la URL del backend al JavaScript del cliente.
+Frontend liviano para consumir el backend de síntesis del proyecto [`tts-piper-2`](https://github.com/lbadilla2021/tts-piper-2). Este repositorio ahora también sincroniza la carpeta `models` del backend para exponer las voces de manera local al frontend.
 
 ## Requisitos
 
 - Python 3.11+
-- `tts-piper-2` corriendo y accesible mediante HTTP
+- `tts-piper-2` corriendo y accesible mediante HTTP (para la síntesis)
 - Docker opcional para un despliegue contenedor
+- Acceso a internet para clonar la carpeta `models` (el servicio seguirá funcionando con los modelos de respaldo si no hay conectividad)
 
 ## Configuración
 
@@ -23,6 +24,12 @@ flask run --host=0.0.0.0 --port=5000
 ```
 
 Abre [http://localhost:5000](http://localhost:5000) en tu navegador y el frontend consumirá el backend configurado.
+
+## Modelos locales
+
+- El endpoint `/api/voices` intenta clonar la carpeta `models` del repositorio [`tts-piper-2`](https://github.com/lbadilla2021/tt-piper-2) usando `git` (se puede sobreescribir con la variable `MODEL_REPO_URL`).
+- Si la sincronización falla (por ejemplo por falta de internet) se usa el catálogo local `models/catalog.json` para mantener la interfaz operativa.
+- El estado de sincronización se muestra en la etiqueta “Modelos locales” dentro del formulario principal.
 
 ## Docker
 

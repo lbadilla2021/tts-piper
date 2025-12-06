@@ -1,0 +1,28 @@
+{
+  "voices": [
+    {
+      "id": "es-mx-junior",
+      "name": "Junior (ES-MX)",
+      "gender": "male",
+      "accent": "Español Latino",
+      "quality": "Premium",
+      "description": "Modelo masculino listo para usar sin conexión."
+    },
+    {
+      "id": "es-mx-luisa",
+      "name": "Luisa (ES-MX)",
+      "gender": "female",
+      "accent": "Español Latino",
+      "quality": "Premium",
+      "description": "Modelo femenino con pronunciación clara y natural."
+    },
+    {
+      "id": "en-us-amy",
+      "name": "Amy (EN-US)",
+      "gender": "female",
+      "accent": "Inglés Americano",
+      "quality": "Standard",
+      "description": "Voz en inglés ideal para materiales bilingües."
+    }
+  ]
+}
