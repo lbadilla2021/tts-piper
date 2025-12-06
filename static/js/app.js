@@ -15,29 +15,61 @@ const audioPlayer = document.getElementById('audio-player');
 const downloadBtn = document.getElementById('download-btn');
 const maleVoicesGrid = document.getElementById('male-voices');
 const femaleVoicesGrid = document.getElementById('female-voices');
+const otherVoicesGrid = document.getElementById('other-voices');
+const syncStatus = document.getElementById('sync-status');
 
 const apiBaseUrl = (window.API_BASE_URL || document.body.dataset.apiBase || '').replace(/\/$/, '');
 const buildApiUrl = (path) => `${apiBaseUrl}${path}`;
 const toAbsoluteUrl = (path) => path.startsWith('http') ? path : `${apiBaseUrl}${path}`;
 
-let voices = { male: [], female: [] };
+let voices = { male: [], female: [], other: [] };
 let currentAudioUrl = null;
 let currentFilename = null;
 
 // Cargar voces disponibles
 async function loadVoices() {
-    try {
-        const response = await fetch(buildApiUrl('/api/voices'));
-        voices = await response.json();
-        renderVoiceCards();
-        updateVoiceSelect();
-    } catch (error) {
-        console.error('Error cargando voces:', error);
+    const candidates = [];
+
+    if (apiBaseUrl) {
+        candidates.push(buildApiUrl('/api/voices'));
     }
+
+    // Siempre intentar también contra el mismo origen
+    candidates.push('/api/voices');
+
+    let lastError = null;
+
+    for (const url of candidates) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Respuesta ${response.status}`);
+            }
+
+            const data = await response.json();
+            voices = {
+                male: data.male || [],
+                female: data.female || [],
+                other: data.other || [],
+            };
+
+            renderVoiceCards();
+            updateVoiceSelect();
+            updateSyncStatus(Boolean(data.synced), data.message);
+            return;
+        } catch (error) {
+            lastError = error;
+            console.error(`Error cargando voces desde ${url}:`, error);
+        }
+    }
+
+    showNotification('No se pudieron cargar las voces locales', 'error');
+    updateSyncStatus(false, lastError?.message || 'Sin conexión con el backend');
 }
 
 function renderVoiceCards() {
     const renderGroup = (container, list, genderClass) => {
+        if (!container) return;
         container.innerHTML = '';
 
         if (!list.length) {
@@ -67,9 +99,15 @@ function renderVoiceCards() {
 
     renderGroup(maleVoicesGrid, voices.male || [], 'male');
     renderGroup(femaleVoicesGrid, voices.female || [], 'female');
+    renderGroup(otherVoicesGrid, voices.other || [], 'other');
 
     document.getElementById('male-count').textContent = voices.male?.length || 0;
     document.getElementById('female-count').textContent = voices.female?.length || 0;
+    const otherCount = voices.other?.length || 0;
+    const otherCounter = document.getElementById('other-count');
+    if (otherCounter) {
+        otherCounter.textContent = otherCount;
+    }
 }
 
 function updateVoiceSelect() {
@@ -143,8 +181,22 @@ speedSlider.addEventListener('input', () => {
 function updateGenerateButton() {
     const hasText = textInput.value.trim().length > 0;
     const hasVoice = voiceSelect.value !== '';
-    
+
     generateBtn.disabled = !(hasText && hasVoice);
+}
+
+function updateSyncStatus(synced, message = '') {
+    if (!syncStatus) return;
+
+    syncStatus.textContent = synced
+        ? 'Modelos locales listos para usarse'
+        : 'No se pudieron sincronizar los modelos automáticamente';
+
+    if (message) {
+        syncStatus.textContent += ` (${message})`;
+    }
+
+    syncStatus.className = 'status-helper ' + (synced ? 'status-ok' : 'status-warning');
 }
 
 // Manejo de archivos - drag and drop
