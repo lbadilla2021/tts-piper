@@ -1,25 +1,17 @@
 version: '3.8'
 
 services:
-  tts-app:
+  frontend:
     build: .
-    container_name: tts-professional
+    container_name: tts-frontend
     ports:
       - "5000:5000"
-    volumes:
-      # Persistir audios generados
-      - ./outputs:/app/outputs
-      # Persistir archivos subidos
-      - ./uploads:/app/uploads
     environment:
-      - FLASK_ENV=production
-      - TZ=America/Santiago
-      - CUDA_VISIBLE_DEVICES=""
-      - PIPER_USE_CUDA=0
+      - API_BASE_URL=http://localhost:8000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 20s

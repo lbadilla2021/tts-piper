@@ -27,16 +27,6 @@ wheels/
 instance/
 .webassets-cache
 
-# Archivos generados
-outputs/*.wav
-uploads/*
-!outputs/.gitkeep
-!uploads/.gitkeep
-
-# Modelos descargados (opcional, comentar si quieres versionarlos)
-# models/*.onnx
-# models/*.json
-
 # Docker
 *.log
 
