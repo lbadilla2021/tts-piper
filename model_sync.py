@@ -51,7 +51,10 @@ class Voice:
 def _run(cmd: List[str]) -> None:
     """Ejecuta un comando y lanza ModelSyncError si falla."""
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise ModelSyncError("git no está instalado en la imagen del contenedor") from exc
     if result.returncode != 0:
         raise ModelSyncError(result.stderr.strip() or "No fue posible ejecutar git")
 
