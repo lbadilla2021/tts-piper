@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from piper.voice import PiperVoice
-import soundfile as sf
+
+from model_sync import sync_models_if_needed
 
 
 BASE_DIR = Path(__file__).parent
@@ -82,6 +83,7 @@ class TTSEngine:
         self.voices: Dict[str, VoiceInfo] = {voice.id: voice for voice in _load_catalog()}
         self._voice_cache: Dict[str, PiperVoice] = {}
         self._lock = threading.Lock()
+        self._sync_inflight = False
 
     def catalog_by_gender(self) -> Dict[str, List[Dict[str, str]]]:
         grouped: Dict[str, List[Dict[str, str]]] = {"male": [], "female": [], "other": []}
@@ -97,6 +99,11 @@ class TTSEngine:
         except KeyError as exc:  # pragma: no cover - validación de entrada
             raise VoiceNotFoundError(f"Voz '{voice_id}' no está configurada") from exc
 
+    def _refresh_catalog(self) -> None:
+        """Recarga el catálogo de voces desde disco tras una resincro."""
+
+        self.voices = {voice.id: voice for voice in _load_catalog()}
+
     def _load_or_get_model(self, voice: VoiceInfo) -> PiperVoice:
         if voice.id in self._voice_cache:
             return self._voice_cache[voice.id]
@@ -106,7 +113,29 @@ class TTSEngine:
         if not voice.config.exists():
             raise SynthesisError(f"No se encontró el archivo de configuración: {voice.config.name}")
 
-        loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        try:
+            loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        except Exception as exc:  # pragma: no cover - depende del estado del modelo
+            # Si la carga falla, intentar una resincro rápida de modelos una sola vez.
+            if self._sync_inflight:
+                raise SynthesisError(
+                    "El modelo o su configuración parecen estar dañados incluso tras reintentar."
+                ) from exc
+
+            self._sync_inflight = True
+            try:
+                synced, message = sync_models_if_needed()
+                if synced:
+                    self._refresh_catalog()
+                    # Reintentar con la información refrescada del catálogo.
+                    voice = self._get_voice(voice.id)
+                    loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+                else:
+                    raise SynthesisError(
+                        "No se pudieron re-sincronizar los modelos automáticamente: " + message
+                    ) from exc
+            finally:
+                self._sync_inflight = False
         self._voice_cache[voice.id] = loaded
         return loaded
 
@@ -116,19 +145,14 @@ class TTSEngine:
 
         voice = self._get_voice(voice_id)
         length_scale = max(0.25, min(4.0, 1.0 / max(speed, 0.1)))
-
-        with self._lock:
-            model = self._load_or_get_model(voice)
-            audio_output = model.synthesize(text, length_scale=length_scale)
-
         filename = f"tts_{uuid.uuid4().hex}.wav"
         output_path = OUTPUT_DIR / filename
 
-        if isinstance(audio_output, tuple):
-            audio_data, sample_rate = audio_output
-            sf.write(output_path, audio_data, int(sample_rate))
-        else:
-            output_path.write_bytes(audio_output)
+        with self._lock:
+            model = self._load_or_get_model(voice)
+            # Piper escribe directamente en el archivo de salida cuando se
+            # proporciona la ruta del wav a generar.
+            model.synthesize(text, str(output_path), length_scale=length_scale)
 
         return filename, output_path
 
