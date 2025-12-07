@@ -73,10 +73,10 @@
     {
       "id": "es-mx-claude-high",
       "name": "Claude (ES-MX)",
-      "gender": "male",
+      "gender": "female",
       "accent": "Español México",
       "quality": "High",
-      "description": "Voz masculina mexicana ideal para contenidos educativos.",
+      "description": "Voz mexicana femenina ideal para contenidos educativos.",
       "model": "es_MX-claude-high.onnx",
       "config": "es_MX-claude-high.onnx.json"
     }

@@ -53,9 +53,22 @@ async function loadVoices() {
                 other: data.other || [],
             };
 
+            const missing = data.missing_models || [];
+            const missingMessage = missing.length
+                ? `Faltan ${missing.length} modelos del catálogo: ${missing
+                      .map((voice) => voice.id)
+                      .join(", ")}.`
+                : "";
+
             renderVoiceCards();
             updateVoiceSelect();
-            updateSyncStatus(Boolean(data.synced), data.message);
+            if (missingMessage) {
+                showNotification(missingMessage, "warning");
+            }
+            const statusMessage = data.message
+                ? `${data.message}${missingMessage ? ` ${missingMessage}` : ""}`
+                : missingMessage;
+            updateSyncStatus(Boolean(data.synced), statusMessage);
             return;
         } catch (error) {
             lastError = error;

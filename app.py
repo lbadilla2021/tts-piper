@@ -47,7 +47,14 @@ def voices():
     """Recupera el catálogo de voces expuesto por el motor local."""
 
     catalog = tts_engine.catalog_by_gender()
-    return jsonify({**catalog, "synced": SYNCED, "message": SYNC_MESSAGE})
+    return jsonify(
+        {
+            **catalog,
+            "synced": SYNCED,
+            "message": SYNC_MESSAGE,
+            "missing_models": tts_engine.missing_voices(),
+        }
+    )
 
 
 @app.route("/api/synthesize", methods=["POST"])
