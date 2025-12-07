@@ -49,6 +49,58 @@ class SynthesisError(RuntimeError):
 
 
 def _load_catalog() -> List[VoiceInfo]:
+    """Carga el catálogo de voces desde disco o lo reconstruye si falta."""
+
+    def _build_catalog_from_dirs() -> List[VoiceInfo]:
+        voices: List[VoiceInfo] = []
+        if not MODELS_DIR.exists():
+            return voices
+
+        for voice_dir in sorted(MODELS_DIR.iterdir()):
+            if not voice_dir.is_dir():
+                continue
+
+            metadata = {}
+            for candidate in (
+                voice_dir / "metadata.json",
+                voice_dir / "model.json",
+                voice_dir / "voice.json",
+            ):
+                if candidate.exists():
+                    try:
+                        metadata = json.loads(candidate.read_text(encoding="utf-8"))
+                        break
+                    except (OSError, json.JSONDecodeError):
+                        metadata = {}
+
+            onnx_files = sorted(voice_dir.glob("*.onnx"))
+            config_files = sorted(voice_dir.glob("*.onnx.json")) + sorted(voice_dir.glob("*.json"))
+            if not onnx_files:
+                continue
+
+            model_path = onnx_files[0]
+            config_path = config_files[0] if config_files else model_path.with_suffix(model_path.suffix + ".json")
+
+            voices.append(
+                VoiceInfo(
+                    id=str(metadata.get("id") or metadata.get("name") or voice_dir.name),
+                    name=str(metadata.get("name") or voice_dir.name.replace("_", " ").title()),
+                    gender=str(metadata.get("gender") or "other"),
+                    accent=str(metadata.get("accent") or metadata.get("language") or "General"),
+                    quality=str(metadata.get("quality") or "Standard"),
+                    description=str(
+                        metadata.get(
+                            "description",
+                            "Modelo reconstruido automáticamente desde la carpeta local de modelos.",
+                        )
+                    ),
+                    model=model_path,
+                    config=config_path,
+                )
+            )
+
+        return voices
+
     catalog_path = MODELS_DIR / "catalog.json"
     try:
         raw = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -59,6 +111,9 @@ def _load_catalog() -> List[VoiceInfo]:
     for entry in raw.get("voices", []):
         model_path = MODELS_DIR / entry.get("model", "")
         config_path = MODELS_DIR / entry.get("config", "")
+        if not model_path.exists():
+            continue
+
         voices.append(
             VoiceInfo(
                 id=str(entry.get("id") or entry.get("name") or model_path.stem),
@@ -72,7 +127,7 @@ def _load_catalog() -> List[VoiceInfo]:
             )
         )
 
-    return voices
+    return voices or _build_catalog_from_dirs()
 
 
 class TTSEngine:
@@ -102,6 +157,7 @@ class TTSEngine:
     def _refresh_catalog(self) -> None:
         """Recarga el catálogo de voces desde disco tras una resincro."""
 
+        self._voice_cache = {}
         self.voices = {voice.id: voice for voice in _load_catalog()}
 
     def _load_or_get_model(self, voice: VoiceInfo) -> PiperVoice:
