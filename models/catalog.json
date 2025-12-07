@@ -11,14 +11,14 @@
       "config": "es_AR-daniela-high.onnx.json"
     },
     {
-      "id": "es-es-ariadna-medium",
+      "id": "es-mx-ald-medium",
       "name": "Ariadna (ES-ES)",
       "gender": "female",
       "accent": "Español España",
       "quality": "Medium",
       "description": "Voz femenina equilibrada para narraciones generales.",
-      "model": "es_ES-ariadna-medium.onnx",
-      "config": "es_ES-ariadna-medium.onnx.json"
+      "model": "es_MX-ald-medium.onnx",
+      "config": "es_MX-ald-medium.onnx.json"
     },
     {
       "id": "es-es-carlfm-xlow",
