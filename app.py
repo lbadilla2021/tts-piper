@@ -13,7 +13,7 @@ import pathlib
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for
 
-from tts_engine import OUTPUT_DIR, TTSEngine, SynthesisError, VoiceNotFoundError
+from tts_engine import CONFIG_BACKUP_DIR, OUTPUT_DIR, TTSEngine, ConfigError, SynthesisError, VoiceNotFoundError
 from model_sync import sync_models_if_needed
 
 app = Flask(__name__)
@@ -55,6 +55,41 @@ def voices():
             "missing_models": tts_engine.missing_voices(),
         }
     )
+
+
+@app.route("/api/config/<voice_id>", methods=["GET", "POST"])
+def config(voice_id: str):
+    """Devuelve o actualiza el archivo de configuración de una voz."""
+
+    try:
+        if request.method == "GET":
+            data = tts_engine.get_config(voice_id)
+            return jsonify({"success": True, **data})
+
+        payload = request.get_json(force=True, silent=True) or {}
+        raw_content = str(payload.get("config") or "")
+        if not raw_content.strip():
+            return jsonify({"success": False, "error": "La configuración es obligatoria"}), 400
+
+        data = tts_engine.update_config(voice_id, raw_content)
+        return jsonify({"success": True, **data})
+    except VoiceNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ConfigError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+
+@app.route("/api/config/<voice_id>/restore", methods=["POST"])
+def restore_config(voice_id: str):
+    """Restaura la configuración original de una voz desde su respaldo."""
+
+    try:
+        data = tts_engine.restore_config(voice_id)
+        return jsonify({"success": True, **data, "restored_from": str(CONFIG_BACKUP_DIR)})
+    except VoiceNotFoundError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except ConfigError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
 
 @app.route("/api/synthesize", methods=["POST"])

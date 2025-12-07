@@ -17,6 +17,12 @@ const maleVoicesGrid = document.getElementById('male-voices');
 const femaleVoicesGrid = document.getElementById('female-voices');
 const otherVoicesGrid = document.getElementById('other-voices');
 const syncStatus = document.getElementById('sync-status');
+const configEditorBlock = document.getElementById('config-editor-block');
+const configEditor = document.getElementById('config-editor');
+const saveConfigBtn = document.getElementById('save-config-btn');
+const restoreConfigBtn = document.getElementById('restore-config-btn');
+const reloadConfigBtn = document.getElementById('reload-config-btn');
+const configStatus = document.getElementById('config-status');
 
 const apiBaseUrl = (window.API_BASE_URL || document.body.dataset.apiBase || '').replace(/\/$/, '');
 const buildApiUrl = (path) => `${apiBaseUrl}${path}`;
@@ -25,6 +31,8 @@ const toAbsoluteUrl = (path) => path.startsWith('http') ? path : `${apiBaseUrl}$
 let voices = { male: [], female: [], other: [] };
 let currentAudioUrl = null;
 let currentFilename = null;
+let lastConfigSnapshot = '';
+let lastConfigVoice = '';
 
 // Cargar voces disponibles
 async function loadVoices() {
@@ -128,6 +136,7 @@ function updateVoiceSelect() {
 
     voiceSelect.innerHTML = '';
     voiceSelect.disabled = !selectedGender;
+    resetConfigEditorState();
 
     if (selectedGender) {
         const defaultOption = document.createElement('option');
@@ -172,7 +181,10 @@ textInput.addEventListener('input', () => {
 genderSelect.addEventListener('change', updateVoiceSelect);
 
 // Actualizar selección de voz
-voiceSelect.addEventListener('change', updateGenerateButton);
+voiceSelect.addEventListener('change', () => {
+    updateGenerateButton();
+    loadVoiceConfig(voiceSelect.value);
+});
 
 // Actualizar velocidad
 speedSlider.addEventListener('input', () => {
@@ -198,6 +210,67 @@ function updateGenerateButton() {
     generateBtn.disabled = !(hasText && hasVoice);
 }
 
+function resetConfigEditorState(message = 'Selecciona una voz para ver su configuración.') {
+    if (!configEditor) return;
+
+    configEditor.value = '';
+    configEditor.disabled = true;
+    saveConfigBtn.disabled = true;
+    restoreConfigBtn.disabled = true;
+    reloadConfigBtn.disabled = true;
+    lastConfigSnapshot = '';
+    lastConfigVoice = '';
+    if (configStatus) {
+        configStatus.textContent = message;
+    }
+}
+
+function setConfigActionState(isLoading) {
+    if (!configEditor) return;
+    const disabled = Boolean(isLoading);
+    saveConfigBtn.disabled = disabled || !configEditor.value.trim() || configEditor.value.trim() === lastConfigSnapshot.trim();
+    restoreConfigBtn.disabled = disabled || !lastConfigSnapshot;
+    reloadConfigBtn.disabled = disabled || !lastConfigVoice;
+    configEditor.disabled = disabled || !lastConfigVoice;
+}
+
+async function loadVoiceConfig(voiceId) {
+    if (!configEditorBlock) return;
+
+    if (!voiceId) {
+        resetConfigEditorState();
+        return;
+    }
+
+    configStatus.textContent = 'Cargando configuración...';
+    configEditor.disabled = true;
+    saveConfigBtn.disabled = true;
+    restoreConfigBtn.disabled = true;
+    reloadConfigBtn.disabled = true;
+
+    try {
+        const response = await fetch(buildApiUrl(`/api/config/${encodeURIComponent(voiceId)}`));
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'No se pudo cargar la configuración');
+        }
+
+        configEditor.value = data.config || '';
+        lastConfigSnapshot = data.config || '';
+        lastConfigVoice = voiceId;
+        configEditor.disabled = false;
+        restoreConfigBtn.disabled = false;
+        reloadConfigBtn.disabled = false;
+        saveConfigBtn.disabled = true;
+        configStatus.textContent = data.path ? `Editando: ${data.path}` : 'Configuración cargada';
+        showNotification('Configuración cargada', 'info');
+    } catch (error) {
+        resetConfigEditorState('No se pudo cargar la configuración.');
+        showNotification(error.message || 'Error al cargar configuración', 'error');
+    }
+}
+
 function updateSyncStatus(synced, message = '') {
     if (!syncStatus) return;
 
@@ -210,6 +283,78 @@ function updateSyncStatus(synced, message = '') {
     }
 
     syncStatus.className = 'status-helper ' + (synced ? 'status-ok' : 'status-warning');
+}
+
+// Edición de configuración de voz
+if (configEditor) {
+    configEditor.addEventListener('input', () => {
+        saveConfigBtn.disabled =
+            configEditor.disabled || !configEditor.value.trim() || configEditor.value.trim() === lastConfigSnapshot.trim();
+    });
+}
+
+async function saveConfigChanges() {
+    if (!lastConfigVoice) return;
+
+    setConfigActionState(true);
+    configStatus.textContent = 'Guardando cambios...';
+
+    try {
+        const response = await fetch(buildApiUrl(`/api/config/${encodeURIComponent(lastConfigVoice)}`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ config: configEditor.value })
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'No se pudo guardar la configuración');
+        }
+
+        configEditor.value = data.config || configEditor.value;
+        lastConfigSnapshot = data.config || configEditor.value;
+        saveConfigBtn.disabled = true;
+        restoreConfigBtn.disabled = false;
+        showNotification('Configuración guardada', 'success');
+        configStatus.textContent = 'Cambios guardados en el archivo de configuración.';
+    } catch (error) {
+        showNotification(error.message || 'Error al guardar configuración', 'error');
+        configStatus.textContent = error.message || 'No se pudo guardar la configuración.';
+    } finally {
+        setConfigActionState(false);
+    }
+}
+
+async function restoreOriginalConfig() {
+    if (!lastConfigVoice) return;
+
+    setConfigActionState(true);
+    configStatus.textContent = 'Restaurando configuración original...';
+
+    try {
+        const response = await fetch(buildApiUrl(`/api/config/${encodeURIComponent(lastConfigVoice)}/restore`), {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'No se pudo restaurar la configuración');
+        }
+
+        configEditor.value = data.config || '';
+        lastConfigSnapshot = data.config || '';
+        saveConfigBtn.disabled = true;
+        restoreConfigBtn.disabled = false;
+        showNotification('Configuración restaurada desde el respaldo', 'success');
+        configStatus.textContent = 'Configuración restaurada al respaldo original.';
+    } catch (error) {
+        showNotification(error.message || 'Error al restaurar la configuración', 'error');
+        configStatus.textContent = error.message || 'No se pudo restaurar la configuración.';
+    } finally {
+        setConfigActionState(false);
+    }
 }
 
 // Manejo de archivos - drag and drop
@@ -241,6 +386,21 @@ fileInput.addEventListener('change', async (e) => {
         await handleFileUpload(e.target.files[0]);
     }
 });
+
+if (reloadConfigBtn) {
+    reloadConfigBtn.addEventListener('click', () => {
+        const targetVoice = lastConfigVoice || voiceSelect.value;
+        loadVoiceConfig(targetVoice);
+    });
+}
+
+if (saveConfigBtn) {
+    saveConfigBtn.addEventListener('click', saveConfigChanges);
+}
+
+if (restoreConfigBtn) {
+    restoreConfigBtn.addEventListener('click', restoreOriginalConfig);
+}
 
 // Procesar archivo subido
 async function handleFileUpload(file) {
@@ -346,6 +506,7 @@ clearBtn.addEventListener('click', () => {
     speedValue.textContent = '1.0x (Normal)';
     resultContainer.style.display = 'none';
     progressContainer.style.display = 'none';
+    resetConfigEditorState('Selecciona una voz para ver su configuración.');
     
     // Limpiar opciones de voz
     voiceSelect.innerHTML = '<option value="">Primero selecciona un género</option>';
@@ -429,6 +590,7 @@ document.head.appendChild(style);
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Aplicación TTS inicializada');
+    resetConfigEditorState('Selecciona una voz para ver su configuración.');
     await loadVoices();
     updateGenerateButton();
 });

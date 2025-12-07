@@ -159,6 +159,28 @@
                         </div>
                     </div>
 
+                    <!-- Config Editor -->
+                    <div class="form-group config-editor" id="config-editor-block">
+                        <label for="config-editor">
+                            <span>Archivo de configuración de la voz</span>
+                            <span class="helper">Edita el JSON para ajustar parámetros avanzados o restaura los valores originales.</span>
+                        </label>
+                        <textarea
+                            id="config-editor"
+                            class="code-area"
+                            rows="12"
+                            spellcheck="false"
+                            placeholder="Selecciona una voz para ver y editar su configuración"
+                            disabled
+                        ></textarea>
+                        <div class="config-actions">
+                            <button id="reload-config-btn" class="btn btn-secondary" type="button" disabled>Recargar</button>
+                            <button id="restore-config-btn" class="btn btn-light" type="button" disabled>Restaurar original</button>
+                            <button id="save-config-btn" class="btn btn-primary" type="button" disabled>Guardar cambios</button>
+                        </div>
+                        <p id="config-status" class="status-helper"></p>
+                    </div>
+
                     <!-- Actions -->
                     <div class="actions">
                         <button id="clear-btn" class="btn btn-secondary">
