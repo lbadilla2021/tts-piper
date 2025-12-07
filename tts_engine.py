@@ -1,6 +1,7 @@
 """Motor de síntesis basado en Piper."""
 
 from __future__ import annotations
+import inspect
 import json
 import threading
 import uuid
@@ -8,8 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from piper.voice import PiperVoice
 import soundfile as sf
+from piper.voice import PiperVoice
+
+from model_sync import sync_models_if_needed
 
 
 BASE_DIR = Path(__file__).parent
@@ -48,6 +51,65 @@ class SynthesisError(RuntimeError):
 
 
 def _load_catalog() -> List[VoiceInfo]:
+    """Carga el catálogo de voces desde disco o lo reconstruye si falta."""
+
+    def _build_catalog_from_dirs() -> List[VoiceInfo]:
+        voices: List[VoiceInfo] = []
+        if not MODELS_DIR.exists():
+            return voices
+
+        for voice_dir in sorted(MODELS_DIR.iterdir()):
+            if not voice_dir.is_dir():
+                continue
+
+            metadata = {}
+            for candidate in (
+                voice_dir / "metadata.json",
+                voice_dir / "model.json",
+                voice_dir / "voice.json",
+            ):
+                if candidate.exists():
+                    try:
+                        metadata = json.loads(candidate.read_text(encoding="utf-8"))
+                        break
+                    except (OSError, json.JSONDecodeError):
+                        metadata = {}
+
+            onnx_files = sorted(voice_dir.glob("*.onnx"))
+            config_files = sorted(voice_dir.glob("*.onnx.json")) + sorted(voice_dir.glob("*.json"))
+            if not onnx_files:
+                continue
+
+            model_path = onnx_files[0]
+            matching_config = [cfg for cfg in config_files if cfg.stem.startswith(model_path.stem)]
+            config_path = (
+                matching_config[0]
+                if matching_config
+                else config_files[0]
+                if config_files
+                else model_path.with_suffix(model_path.suffix + ".json")
+            )
+
+            voices.append(
+                VoiceInfo(
+                    id=str(metadata.get("id") or metadata.get("name") or voice_dir.name),
+                    name=str(metadata.get("name") or voice_dir.name.replace("_", " ").title()),
+                    gender=str(metadata.get("gender") or "other"),
+                    accent=str(metadata.get("accent") or metadata.get("language") or "General"),
+                    quality=str(metadata.get("quality") or "Standard"),
+                    description=str(
+                        metadata.get(
+                            "description",
+                            "Modelo reconstruido automáticamente desde la carpeta local de modelos.",
+                        )
+                    ),
+                    model=model_path,
+                    config=config_path,
+                )
+            )
+
+        return voices
+
     catalog_path = MODELS_DIR / "catalog.json"
     try:
         raw = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -58,6 +120,9 @@ def _load_catalog() -> List[VoiceInfo]:
     for entry in raw.get("voices", []):
         model_path = MODELS_DIR / entry.get("model", "")
         config_path = MODELS_DIR / entry.get("config", "")
+        if not model_path.exists():
+            continue
+
         voices.append(
             VoiceInfo(
                 id=str(entry.get("id") or entry.get("name") or model_path.stem),
@@ -71,7 +136,31 @@ def _load_catalog() -> List[VoiceInfo]:
             )
         )
 
-    return voices
+    if voices:
+        return voices
+
+    rebuilt = _build_catalog_from_dirs()
+    if rebuilt:
+        try:
+            catalog_payload = {
+                "voices": [
+                    voice.as_public_dict()
+                    | {
+                        "model": str(voice.model.relative_to(MODELS_DIR)),
+                        "config": str(voice.config.relative_to(MODELS_DIR)),
+                    }
+                    for voice in rebuilt
+                ]
+            }
+            catalog_path.write_text(
+                json.dumps(catalog_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            # No bloquear la carga si no se puede persistir el catálogo reconstruido.
+            pass
+
+    return rebuilt
 
 
 class TTSEngine:
@@ -82,6 +171,7 @@ class TTSEngine:
         self.voices: Dict[str, VoiceInfo] = {voice.id: voice for voice in _load_catalog()}
         self._voice_cache: Dict[str, PiperVoice] = {}
         self._lock = threading.Lock()
+        self._sync_inflight = False
 
     def catalog_by_gender(self) -> Dict[str, List[Dict[str, str]]]:
         grouped: Dict[str, List[Dict[str, str]]] = {"male": [], "female": [], "other": []}
@@ -97,6 +187,12 @@ class TTSEngine:
         except KeyError as exc:  # pragma: no cover - validación de entrada
             raise VoiceNotFoundError(f"Voz '{voice_id}' no está configurada") from exc
 
+    def _refresh_catalog(self) -> None:
+        """Recarga el catálogo de voces desde disco tras una resincro."""
+
+        self._voice_cache = {}
+        self.voices = {voice.id: voice for voice in _load_catalog()}
+
     def _load_or_get_model(self, voice: VoiceInfo) -> PiperVoice:
         if voice.id in self._voice_cache:
             return self._voice_cache[voice.id]
@@ -106,7 +202,29 @@ class TTSEngine:
         if not voice.config.exists():
             raise SynthesisError(f"No se encontró el archivo de configuración: {voice.config.name}")
 
-        loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        try:
+            loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        except Exception as exc:  # pragma: no cover - depende del estado del modelo
+            # Si la carga falla, intentar una resincro rápida de modelos una sola vez.
+            if self._sync_inflight:
+                raise SynthesisError(
+                    "El modelo o su configuración parecen estar dañados incluso tras reintentar."
+                ) from exc
+
+            self._sync_inflight = True
+            try:
+                synced, message = sync_models_if_needed()
+                if synced:
+                    self._refresh_catalog()
+                    # Reintentar con la información refrescada del catálogo.
+                    voice = self._get_voice(voice.id)
+                    loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+                else:
+                    raise SynthesisError(
+                        "No se pudieron re-sincronizar los modelos automáticamente: " + message
+                    ) from exc
+            finally:
+                self._sync_inflight = False
         self._voice_cache[voice.id] = loaded
         return loaded
 
@@ -116,21 +234,43 @@ class TTSEngine:
 
         voice = self._get_voice(voice_id)
         length_scale = max(0.25, min(4.0, 1.0 / max(speed, 0.1)))
+        filename = f"tts_{uuid.uuid4().hex}.wav"
+        output_path = OUTPUT_DIR / filename
 
         with self._lock:
             model = self._load_or_get_model(voice)
-            audio_output = model.synthesize(text, length_scale=length_scale)
+            self._synthesize_to_file(model, text, output_path, length_scale)
 
-        filename = f"tts_{uuid.uuid4().hex}.wav"
-        output_path = OUTPUT_DIR / filename
+        return filename, output_path
+
+    def _synthesize_to_file(
+        self, model: PiperVoice, text: str, output_path: Path, length_scale: float
+    ) -> None:
+        """Genera el audio manejando versiones nuevas y antiguas de Piper."""
+
+        sig = inspect.signature(model.synthesize)
+        params = list(sig.parameters.values())
+
+        try:
+            # Versiones recientes exigen ``wav_file`` como argumento posicional.
+            if len(params) >= 2 and params[1].name == "wav_file":
+                model.synthesize(text, str(output_path), length_scale=length_scale)
+                return
+
+            # Versiones antiguas devuelven los bytes o el tuple (audio, sample_rate).
+            audio_output = model.synthesize(text, length_scale=length_scale)
+        except TypeError:
+            # Si la introspección falló, intenta la ruta inversa.
+            audio_output = model.synthesize(text, str(output_path), length_scale=length_scale)
+            return
 
         if isinstance(audio_output, tuple):
             audio_data, sample_rate = audio_output
             sf.write(output_path, audio_data, int(sample_rate))
-        else:
+        elif isinstance(audio_output, (bytes, bytearray)):
             output_path.write_bytes(audio_output)
-
-        return filename, output_path
+        else:
+            raise SynthesisError("La librería Piper devolvió un formato de audio inesperado")
 
 
 __all__ = ["TTSEngine", "VoiceNotFoundError", "SynthesisError", "VoiceInfo", "OUTPUT_DIR"]
