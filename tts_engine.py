@@ -79,7 +79,14 @@ def _load_catalog() -> List[VoiceInfo]:
                 continue
 
             model_path = onnx_files[0]
-            config_path = config_files[0] if config_files else model_path.with_suffix(model_path.suffix + ".json")
+            matching_config = [cfg for cfg in config_files if cfg.stem.startswith(model_path.stem)]
+            config_path = (
+                matching_config[0]
+                if matching_config
+                else config_files[0]
+                if config_files
+                else model_path.with_suffix(model_path.suffix + ".json")
+            )
 
             voices.append(
                 VoiceInfo(
@@ -127,7 +134,31 @@ def _load_catalog() -> List[VoiceInfo]:
             )
         )
 
-    return voices or _build_catalog_from_dirs()
+    if voices:
+        return voices
+
+    rebuilt = _build_catalog_from_dirs()
+    if rebuilt:
+        try:
+            catalog_payload = {
+                "voices": [
+                    voice.as_public_dict()
+                    | {
+                        "model": str(voice.model.relative_to(MODELS_DIR)),
+                        "config": str(voice.config.relative_to(MODELS_DIR)),
+                    }
+                    for voice in rebuilt
+                ]
+            }
+            catalog_path.write_text(
+                json.dumps(catalog_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            # No bloquear la carga si no se puede persistir el catálogo reconstruido.
+            pass
+
+    return rebuilt
 
 
 class TTSEngine:
