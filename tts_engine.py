@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from piper.voice import PiperVoice
-import soundfile as sf
 
 
 BASE_DIR = Path(__file__).parent
@@ -106,7 +105,13 @@ class TTSEngine:
         if not voice.config.exists():
             raise SynthesisError(f"No se encontró el archivo de configuración: {voice.config.name}")
 
-        loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        try:
+            loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        except Exception as exc:  # pragma: no cover - depende del estado del modelo
+            raise SynthesisError(
+                "El modelo o su configuración parecen estar dañados. "
+                "Intenta volver a sincronizar los modelos e intenta de nuevo."
+            ) from exc
         self._voice_cache[voice.id] = loaded
         return loaded
 
@@ -116,19 +121,14 @@ class TTSEngine:
 
         voice = self._get_voice(voice_id)
         length_scale = max(0.25, min(4.0, 1.0 / max(speed, 0.1)))
-
-        with self._lock:
-            model = self._load_or_get_model(voice)
-            audio_output = model.synthesize(text, length_scale=length_scale)
-
         filename = f"tts_{uuid.uuid4().hex}.wav"
         output_path = OUTPUT_DIR / filename
 
-        if isinstance(audio_output, tuple):
-            audio_data, sample_rate = audio_output
-            sf.write(output_path, audio_data, int(sample_rate))
-        else:
-            output_path.write_bytes(audio_output)
+        with self._lock:
+            model = self._load_or_get_model(voice)
+            # Piper escribe directamente en el archivo de salida cuando se
+            # proporciona la ruta del wav a generar.
+            model.synthesize(text, str(output_path), length_scale=length_scale)
 
         return filename, output_path
 
