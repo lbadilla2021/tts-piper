@@ -5,6 +5,7 @@ import inspect
 import json
 import threading
 import uuid
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -252,18 +253,25 @@ class TTSEngine:
         params = list(sig.parameters.values())
 
         try:
-            # Versiones recientes exigen ``wav_file`` como argumento posicional.
+            # Versiones recientes exigen ``wav_file`` como argumento posicional
+            # y esperan un manejador abierto, no una ruta en cadena.
             if len(params) >= 2 and params[1].name == "wav_file":
-                model.synthesize(text, str(output_path), length_scale=length_scale)
+                with wave.open(str(output_path), "wb") as wav_file:
+                    model.synthesize(text, wav_file, length_scale=length_scale)
                 return
 
             # Versiones antiguas devuelven los bytes o el tuple (audio, sample_rate).
             audio_output = model.synthesize(text, length_scale=length_scale)
-        except TypeError:
+        except TypeError as exc:
             # Si la introspección falló, intenta la ruta inversa.
-            audio_output = model.synthesize(text, str(output_path), length_scale=length_scale)
-            return
-
+            try:
+                model.synthesize(text, str(output_path), length_scale=length_scale)
+                return
+            except TypeError as inner_exc:  # pragma: no cover - dependiente de versión
+                raise SynthesisError(
+                    "La firma de PiperVoice.synthesize no es compatible: se esperaba un path o un manejador WAV."
+                ) from inner_exc
+        
         if isinstance(audio_output, tuple):
             audio_data, sample_rate = audio_output
             sf.write(output_path, audio_data, int(sample_rate))
