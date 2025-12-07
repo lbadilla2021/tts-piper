@@ -3,13 +3,15 @@
 from __future__ import annotations
 import inspect
 import json
+import re
 import threading
 import uuid
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import soundfile as sf
 from piper.voice import PiperVoice
 
@@ -275,9 +277,17 @@ class TTSEngine:
         filename = f"tts_{uuid.uuid4().hex}.wav"
         output_path = OUTPUT_DIR / filename
 
+        segments = self._split_text_by_pause_tags(text)
+
+        if len(segments) == 1 and segments[0][0] == "text":
+            with self._lock:
+                model = self._load_or_get_model(voice)
+                self._synthesize_to_file(model, text, output_path, length_scale)
+            return filename, output_path
+
         with self._lock:
             model = self._load_or_get_model(voice)
-            self._synthesize_to_file(model, text, output_path, length_scale)
+            self._synthesize_with_pauses(model, voice, segments, output_path, length_scale)
 
         return filename, output_path
 
@@ -316,6 +326,138 @@ class TTSEngine:
             output_path.write_bytes(audio_output)
         else:
             raise SynthesisError("La librería Piper devolvió un formato de audio inesperado")
+
+    def _synthesize_with_pauses(
+        self,
+        model: PiperVoice,
+        voice: VoiceInfo,
+        segments: List[Tuple[str, int | str]],
+        output_path: Path,
+        length_scale: float,
+    ) -> None:
+        sample_rate = self._get_sample_rate(voice)
+        num_channels = self._get_num_channels(voice)
+        temp_files: List[Path] = []
+        audio_chunks: List[np.ndarray] = []
+
+        try:
+            for kind, content in segments:
+                if kind == "pause":
+                    pause_ms = int(content)
+                    silence = self._build_silence(sample_rate, num_channels, pause_ms)
+                    if silence is not None:
+                        audio_chunks.append(silence)
+                    continue
+
+                part_path = OUTPUT_DIR / f"part_{uuid.uuid4().hex}.wav"
+                text_chunk = str(content)
+                self._synthesize_to_file(model, text_chunk, part_path, length_scale)
+                temp_files.append(part_path)
+
+                audio_data, part_sample_rate = sf.read(part_path, dtype="float32")
+
+                if part_sample_rate <= 0:
+                    raise SynthesisError("La parte sintetizada tiene una tasa de muestreo inválida")
+
+                if sample_rate is None:
+                    sample_rate = int(part_sample_rate)
+                elif int(part_sample_rate) != int(sample_rate):
+                    raise SynthesisError(
+                        "Las partes sintetizadas tienen diferentes tasas de muestreo; no se pueden concatenar"
+                    )
+
+                if audio_data.ndim > 1:
+                    num_channels = audio_data.shape[1]
+                else:
+                    num_channels = 1
+
+                audio_chunks.append(audio_data)
+
+            if not audio_chunks:
+                raise SynthesisError("El texto no contiene fragmentos sintetizables")
+
+            if sample_rate is None:
+                raise SynthesisError("No se pudo determinar la tasa de muestreo para el audio de salida")
+
+            merged = np.concatenate(audio_chunks, axis=0)
+            sf.write(output_path, merged, int(sample_rate))
+        finally:
+            for part in temp_files:
+                try:
+                    part.unlink()
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _split_text_by_pause_tags(text: str) -> List[Tuple[str, int | str]]:
+        pattern = re.compile(r"<p=(\d+)>", flags=re.IGNORECASE)
+        segments: List[Tuple[str, int | str]] = []
+        last_index = 0
+
+        for match in pattern.finditer(text):
+            start, end = match.span()
+            before = text[last_index:start].strip()
+            if before:
+                segments.append(("text", before))
+
+            duration_ms = int(match.group(1))
+            if duration_ms > 0:
+                segments.append(("pause", duration_ms))
+
+            last_index = end
+
+        tail = text[last_index:].strip()
+        if tail:
+            segments.append(("text", tail))
+
+        return segments or [("text", text.strip())]
+
+    @staticmethod
+    def _get_sample_rate(voice: VoiceInfo) -> int | None:
+        try:
+            data = json.loads(voice.config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        audio_cfg = data.get("audio", {}) if isinstance(data, dict) else {}
+        for key in ("sample_rate", "sampleRate"):
+            value = audio_cfg.get(key) if isinstance(audio_cfg, dict) else None
+            if isinstance(value, (int, float)) and value > 0:
+                return int(value)
+
+        for key in ("sample_rate", "sampleRate"):
+            value = data.get(key) if isinstance(data, dict) else None
+            if isinstance(value, (int, float)) and value > 0:
+                return int(value)
+
+        return None
+
+    @staticmethod
+    def _get_num_channels(voice: VoiceInfo) -> int:
+        try:
+            data: Any = json.loads(voice.config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return 1
+
+        audio_cfg = data.get("audio", {}) if isinstance(data, dict) else {}
+        if isinstance(audio_cfg, dict):
+            channels = audio_cfg.get("num_channels") or audio_cfg.get("channels")
+            if isinstance(channels, int) and channels > 0:
+                return channels
+
+        return 1
+
+    @staticmethod
+    def _build_silence(sample_rate: int | None, num_channels: int, pause_ms: int) -> np.ndarray | None:
+        if sample_rate is None or pause_ms <= 0:
+            return None
+
+        frames = int(round(sample_rate * (pause_ms / 1000.0)))
+        if frames <= 0:
+            return None
+
+        shape = (frames, max(1, num_channels)) if num_channels > 1 else (frames,)
+        return np.zeros(shape, dtype="float32")
 
 
 __all__ = ["TTSEngine", "VoiceNotFoundError", "SynthesisError", "VoiceInfo", "OUTPUT_DIR"]
