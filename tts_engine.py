@@ -174,6 +174,43 @@ class TTSEngine:
         self._lock = threading.Lock()
         self._sync_inflight = False
 
+    def missing_voices(self) -> List[Dict[str, str]]:
+        """Devuelve las voces del catálogo que no tienen sus archivos en disco."""
+
+        catalog_path = MODELS_DIR / "catalog.json"
+        try:
+            raw = json.loads(catalog_path.read_text(encoding="utf-8"))
+            catalog_entries = raw.get("voices", []) if isinstance(raw, dict) else []
+        except (OSError, json.JSONDecodeError):
+            catalog_entries = []
+
+        missing: List[Dict[str, str]] = []
+        for entry in catalog_entries:
+            if not isinstance(entry, dict):
+                continue
+
+            model_path = MODELS_DIR / str(entry.get("model", ""))
+            config_path = MODELS_DIR / str(entry.get("config", ""))
+            issues = []
+
+            if not model_path.exists() or not model_path.is_file():
+                issues.append(f"Falta el modelo {model_path.name or model_path}")
+
+            if not config_path.exists() or not config_path.is_file():
+                issues.append(f"Falta el archivo de configuración {config_path.name or config_path}")
+
+            if issues:
+                missing.append(
+                    {
+                        "id": str(entry.get("id") or entry.get("name") or model_path.stem),
+                        "model": str(entry.get("model", "")),
+                        "config": str(entry.get("config", "")),
+                        "issues": issues,
+                    }
+                )
+
+        return missing
+
     def catalog_by_gender(self) -> Dict[str, List[Dict[str, str]]]:
         grouped: Dict[str, List[Dict[str, str]]] = {"male": [], "female": [], "other": []}
         for voice in self.voices.values():
