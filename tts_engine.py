@@ -1,6 +1,7 @@
 """Motor de síntesis basado en Piper."""
 
 from __future__ import annotations
+import inspect
 import json
 import threading
 import uuid
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import soundfile as sf
 from piper.voice import PiperVoice
 
 from model_sync import sync_models_if_needed
@@ -237,11 +239,38 @@ class TTSEngine:
 
         with self._lock:
             model = self._load_or_get_model(voice)
-            # Piper escribe directamente en el archivo de salida cuando se
-            # proporciona la ruta del wav a generar.
-            model.synthesize(text, str(output_path), length_scale=length_scale)
+            self._synthesize_to_file(model, text, output_path, length_scale)
 
         return filename, output_path
+
+    def _synthesize_to_file(
+        self, model: PiperVoice, text: str, output_path: Path, length_scale: float
+    ) -> None:
+        """Genera el audio manejando versiones nuevas y antiguas de Piper."""
+
+        sig = inspect.signature(model.synthesize)
+        params = list(sig.parameters.values())
+
+        try:
+            # Versiones recientes exigen ``wav_file`` como argumento posicional.
+            if len(params) >= 2 and params[1].name == "wav_file":
+                model.synthesize(text, str(output_path), length_scale=length_scale)
+                return
+
+            # Versiones antiguas devuelven los bytes o el tuple (audio, sample_rate).
+            audio_output = model.synthesize(text, length_scale=length_scale)
+        except TypeError:
+            # Si la introspección falló, intenta la ruta inversa.
+            audio_output = model.synthesize(text, str(output_path), length_scale=length_scale)
+            return
+
+        if isinstance(audio_output, tuple):
+            audio_data, sample_rate = audio_output
+            sf.write(output_path, audio_data, int(sample_rate))
+        elif isinstance(audio_output, (bytes, bytearray)):
+            output_path.write_bytes(audio_output)
+        else:
+            raise SynthesisError("La librería Piper devolvió un formato de audio inesperado")
 
 
 __all__ = ["TTSEngine", "VoiceNotFoundError", "SynthesisError", "VoiceInfo", "OUTPUT_DIR"]
