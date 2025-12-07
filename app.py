@@ -14,8 +14,10 @@ import pathlib
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for
 
 from tts_engine import OUTPUT_DIR, TTSEngine, SynthesisError, VoiceNotFoundError
+from model_sync import sync_models_if_needed
 
 app = Flask(__name__)
+SYNCED, SYNC_MESSAGE = sync_models_if_needed()
 tts_engine = TTSEngine()
 
 
@@ -45,7 +47,7 @@ def voices():
     """Recupera el catálogo de voces expuesto por el motor local."""
 
     catalog = tts_engine.catalog_by_gender()
-    return jsonify({**catalog, "synced": True, "message": "Modelos locales listos"})
+    return jsonify({**catalog, "synced": SYNCED, "message": SYNC_MESSAGE})
 
 
 @app.route("/api/synthesize", methods=["POST"])
