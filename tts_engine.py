@@ -390,7 +390,7 @@ class TTSEngine:
 
     @staticmethod
     def _split_text_by_pause_tags(text: str) -> List[Tuple[str, int | str]]:
-        pattern = re.compile(r"<p=(\d+)>", flags=re.IGNORECASE)
+        pattern = re.compile(r"<p\s*=\s*(\d+)\s*>", flags=re.IGNORECASE)
         segments: List[Tuple[str, int | str]] = []
         last_index = 0
 
