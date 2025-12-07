@@ -4,6 +4,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
+import shutil
 import threading
 import uuid
 import wave
@@ -21,6 +22,7 @@ from model_sync import sync_models_if_needed
 BASE_DIR = Path(__file__).parent
 MODELS_DIR = BASE_DIR / "models"
 OUTPUT_DIR = BASE_DIR / "outputs"
+CONFIG_BACKUP_DIR = MODELS_DIR / ".config_backups"
 
 
 @dataclass
@@ -50,6 +52,10 @@ class VoiceNotFoundError(RuntimeError):
 
 
 class SynthesisError(RuntimeError):
+    pass
+
+
+class ConfigError(RuntimeError):
     pass
 
 
@@ -175,6 +181,7 @@ class TTSEngine:
         self._voice_cache: Dict[str, PiperVoice] = {}
         self._lock = threading.Lock()
         self._sync_inflight = False
+        self._ensure_config_backups()
 
     def missing_voices(self) -> List[Dict[str, str]]:
         """Devuelve las voces del catálogo que no tienen sus archivos en disco."""
@@ -232,6 +239,78 @@ class TTSEngine:
 
         self._voice_cache = {}
         self.voices = {voice.id: voice for voice in _load_catalog()}
+        self._ensure_config_backups()
+
+    def _backup_path_for(self, config_path: Path) -> Path:
+        try:
+            relative = config_path.relative_to(MODELS_DIR)
+        except ValueError:
+            relative = Path(config_path.name)
+
+        return CONFIG_BACKUP_DIR / relative
+
+    def _ensure_config_backups(self) -> None:
+        """Garantiza que exista una copia de los archivos de configuración."""
+
+        CONFIG_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        for voice in self.voices.values():
+            try:
+                backup_path = self._backup_path_for(voice.config)
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                if voice.config.exists() and not backup_path.exists():
+                    shutil.copy2(voice.config, backup_path)
+            except OSError:
+                # Si no se puede crear el respaldo no bloquear el arranque.
+                continue
+
+    def _read_config(self, voice: VoiceInfo, *, original: bool = False) -> str:
+        target = self._backup_path_for(voice.config) if original else voice.config
+        try:
+            return target.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError("No se pudo leer el archivo de configuración") from exc
+
+    def get_config(self, voice_id: str) -> Dict[str, str]:
+        voice = self._get_voice(voice_id)
+        self._ensure_config_backups()
+        return {
+            "config": self._read_config(voice, original=False),
+            "original": self._read_config(voice, original=True),
+            "path": str(voice.config),
+        }
+
+    def update_config(self, voice_id: str, raw_content: str) -> Dict[str, str]:
+        voice = self._get_voice(voice_id)
+        self._ensure_config_backups()
+
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError as exc:
+            raise ConfigError("El archivo de configuración no es un JSON válido") from exc
+
+        try:
+            formatted = json.dumps(parsed, ensure_ascii=False, indent=2)
+            voice.config.write_text(formatted + "\n", encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError("No se pudo guardar el archivo de configuración") from exc
+
+        self._voice_cache.pop(voice.id, None)
+        return {"config": formatted}
+
+    def restore_config(self, voice_id: str) -> Dict[str, str]:
+        voice = self._get_voice(voice_id)
+        backup_path = self._backup_path_for(voice.config)
+
+        if not backup_path.exists():
+            raise ConfigError("No existe un respaldo para esta configuración")
+
+        try:
+            voice.config.write_text(backup_path.read_text(encoding="utf-8"), encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError("No se pudo restaurar el archivo de configuración") from exc
+
+        self._voice_cache.pop(voice.id, None)
+        return {"config": self._read_config(voice)}
 
     def _load_or_get_model(self, voice: VoiceInfo) -> PiperVoice:
         if voice.id in self._voice_cache:
@@ -460,4 +539,12 @@ class TTSEngine:
         return np.zeros(shape, dtype="float32")
 
 
-__all__ = ["TTSEngine", "VoiceNotFoundError", "SynthesisError", "VoiceInfo", "OUTPUT_DIR"]
+__all__ = [
+    "TTSEngine",
+    "VoiceNotFoundError",
+    "SynthesisError",
+    "VoiceInfo",
+    "OUTPUT_DIR",
+    "ConfigError",
+    "CONFIG_BACKUP_DIR",
+]

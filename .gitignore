@@ -46,3 +46,4 @@ Thumbs.db
 *.temp
 *.onnx
 *.wav
+models/.config_backups/
