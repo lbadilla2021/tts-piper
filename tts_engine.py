@@ -106,7 +106,13 @@ class TTSEngine:
         if not voice.config.exists():
             raise SynthesisError(f"No se encontró el archivo de configuración: {voice.config.name}")
 
-        loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        try:
+            loaded = PiperVoice.load(str(voice.model), config_path=str(voice.config))
+        except Exception as exc:  # pragma: no cover - depende del estado del modelo
+            raise SynthesisError(
+                "El modelo o su configuración parecen estar dañados. "
+                "Intenta volver a sincronizar los modelos e intenta de nuevo."
+            ) from exc
         self._voice_cache[voice.id] = loaded
         return loaded
 
